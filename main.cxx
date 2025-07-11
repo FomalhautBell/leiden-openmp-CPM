@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdio>
 #include "inc/main.hxx"
+#include "inc/leiden.hxx"
 
 using namespace std;
 
@@ -19,7 +20,7 @@ using namespace std;
 #endif
 #ifndef MAX_THREADS
 /** Maximum number of threads to use. */
-#define MAX_THREADS 64
+#define MAX_THREADS 128
 #endif
 #ifndef REPEAT_METHOD
 /** Number of times to repeat each method. */
@@ -83,16 +84,48 @@ int main(int argc, char **argv) {
   using K = uint32_t;
   using V = TYPE;
   install_sigsegv();
+  if (argc < 2) {
+    cerr << "usage: leiden-omp <matrix.mtx> [sym=0] [weighted=0] "
+            "[gamma=0.7] [quality=1 (0=MODULARITY,1=CPM)]\n";
+    return 1;
+  }
   char *file     = argv[1];
-  bool symmetric = argc>2? stoi(argv[2]) : false;
-  bool weighted  = argc>3? stoi(argv[3]) : false;
+  bool symmetric = argc > 2 ? std::stoi(argv[2]) : 0;
+  bool weighted  = argc > 3 ? std::stoi(argv[3]) : 0;
+  double gamma   = argc > 4 ? std::stod(argv[4]) : 1.3;
+  int    quality = argc > 5 ? std::stoi(argv[5]) : 1;
   omp_set_num_threads(MAX_THREADS);
   LOG("OMP_NUM_THREADS=%d\n", MAX_THREADS);
   LOG("Loading graph %s ...\n", file);
   DiGraph<K, None, V> x;
-  readMtxOmpW(x, file, weighted); LOG(""); println(x);
-  if (!symmetric) { x = symmetricizeOmp(x); LOG(""); print(x); printf(" (symmetricize)\n"); }
-  runExperiment(x);
-  printf("\n");
+  readMtxOmpW(x, file, weighted); double m = edgeWeightOmp(x) / 2.0; LOG(""); println(x);
+
+  LeidenOptions opts{};
+  opts.repeat               = REPEAT_METHOD;
+  opts.useCPM               = (quality == 1);
+  opts.resolution           = gamma;
+  opts.tolerance            = 1.3;
+  opts.aggregationTolerance = 0.1;
+  opts.toleranceDrop        = 1;
+  opts.maxIterations        = 10;
+  opts.maxPasses            = 20;
+
+  if (!symmetric) {x = symmetricizeOmp(x); LOG(""); println(x); printf(" (symmetricize)\n");}
+
+  auto res = leidenStaticOmp(x, opts);
+
+  printf("=== Leiden-%s(γ=%.2f) time（ms） ===\n",
+         opts.useCPM ? "CPM" : "Modularity", opts.resolution);
+  printf("totaltime: %.1f\n", res.time);
+  printf("marking: %.1f\n", res.markingTime);
+  printf("init: %.1f\n", res.initializationTime);
+  printf("firstpass: %.1f\n", res.firstPassTime);
+  printf("local: %.1f\n", res.localMoveTime);
+  printf("refine: %.1f\n", res.refinementTime);
+  printf("aggregation: %.1f\n", res.aggregationTime);
+  printf("===========================================\n");
+
+  auto comm = communities(x, res.membership);
+  printf("communitynumber = %zu\n", comm.size());
   return 0;
 }
