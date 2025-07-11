@@ -89,7 +89,7 @@ class DiGraph {
    * @returns is the graph directed?
    */
   inline bool directed() const noexcept {
-    return true;
+    return false;
   }
   #pragma endregion
 
@@ -452,7 +452,7 @@ class DiGraphCsr {
    * @returns is the graph directed?
    */
   inline bool directed() const noexcept {
-    return true;
+    return false;
   }
   #pragma endregion
 

@@ -259,6 +259,27 @@ inline double deltaModularity(double vcout, double vdout, double vtot, double ct
 
 
 
+#pragma region DELTA CPM
+/**
+ * ΔQ for Constant Potts Model (CPM).
+ *   w_in        : sum of internal edge weights between u 和 v
+ *   k_in        : degree (total weight) of u
+ *   M           : total edge weight of the graph (2 m)
+ *   gamma (γ)   : resolution parameter
+ *
+ * ΔQ_CPM = w_in − γ * k_in² / (2 M)
+ */
+// ΔQ when moving u from d → c   (undirected CPM)
+template<class W>
+inline W deltaCPM_full(W w_uc, W w_ud, W k_u, W k_c, W k_d, W M, double gamma){
+    return   w_uc - w_ud
+           - gamma * k_u * (k_c - k_d + k_u) / (2.0 * M);
+}
+
+
+
+
+
 #pragma region COMMUNITIES
 /**
  * Obtain the size of each community.
@@ -400,5 +421,4 @@ inline vector<char> communitiesDisconnectedOmp(const G& x, const vector<K>& vcom
   return a;
 }
 #endif
-#pragma endregion
 #pragma endregion

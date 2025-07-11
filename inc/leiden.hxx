@@ -35,16 +35,18 @@ struct LeidenOptions {
   int repeat;
   /** Resolution parameter for modularity [1]. */
   double resolution;
-  /** Tolerance for convergence [1e-2]. */
+  /** Tolerance for convergence [1e-7]. */
   double tolerance;
-  /** Tolerance for aggregation [0.8]. */
+  /** Tolerance for aggregation [0]. */
   double aggregationTolerance;
-  /** Tolerance drop factor after each pass [10]. */
+  /** Tolerance drop factor after each pass [1]. */
   double toleranceDrop;
-  /** Maximum number of iterations per pass [20]. */
+  /** Maximum number of iterations per pass [-1]. */
   int maxIterations;
-  /** Maximum number of passes [10]. */
+  /** Maximum number of passes [-1]. */
   int maxPasses;
+  /** Use Constant-Potts Model quality function (true) or Modularity (false) [false]. */
+  bool useCPM;
   #pragma endregion
 
 
@@ -59,8 +61,8 @@ struct LeidenOptions {
    * @param maxIterations maximum number of iterations per pass [20]
    * @param maxPasses maximum number of passes [10]
    */
-  LeidenOptions(int repeat=1, double resolution=1, double tolerance=1e-2, double aggregationTolerance=0.8, double toleranceDrop=10, int maxIterations=20, int maxPasses=10) :
-  repeat(repeat), resolution(resolution), tolerance(tolerance), aggregationTolerance(aggregationTolerance), toleranceDrop(toleranceDrop), maxIterations(maxIterations), maxPasses(maxPasses) {}
+  LeidenOptions(int repeat=1, double resolution=1, double tolerance=1e-2, double aggregationTolerance=0.8, double toleranceDrop=10, int maxIterations=20, int maxPasses=10, bool useCPM=false) :
+  repeat(repeat), resolution(resolution), tolerance(tolerance), aggregationTolerance(aggregationTolerance), toleranceDrop(toleranceDrop), maxIterations(maxIterations), maxPasses(maxPasses), useCPM(useCPM) {}
   #pragma endregion
 };
 
@@ -490,13 +492,16 @@ inline void leidenClearScanW(vector<K>& vcs, vector<W>& vcout) {
  * @returns [best community, delta modularity]
  */
 template <bool SELF=false, class G, class K, class W>
-inline auto leidenChooseCommunity(const G& x, K u, const vector<K>& vcom, const vector<W>& vtot, const vector<W>& ctot, const vector<K>& vcs, const vector<W>& vcout, double M, double R) {
-  K cmax = K(), d = vcom[u];
+inline auto leidenChooseCommunity(const G& x, K u, const vector<K>& vcom, const vector<W>& vtot, const vector<W>& ctot, const vector<K>& vcs, const vector<W>& vcout, double M, double R, bool useCPM) {
+  K d = vcom[u];
+  K cmax = K();
   W emax = W();
   for (K c : vcs) {
     if (!SELF && c==d) continue;
-    W e = deltaModularity(vcout[c], vcout[d], vtot[u], ctot[c], ctot[d], M, R);
-    if (e>emax) { emax = e; cmax = c; }
+    W e = useCPM
+          ? deltaCPM_full(vcout[c], vcout[d], vtot[u], ctot[c], ctot[d], M, R)
+          : deltaModularity (vcout[c], vcout[d], vtot[u], ctot[c], ctot[d], M, R);
+    if (e > emax) { emax = e; cmax = c; }
   }
   return make_pair(cmax, emax);
 }
@@ -580,7 +585,7 @@ inline bool leidenChangeCommunityOmpW(vector<K>& vcom, vector<W>& ctot, const G&
  * @returns iterations performed (0 if converged already)
  */
 template <bool REFINE=false, class G, class K, class W, class B, class FC, class FA>
-inline int leidenMoveW(vector<K>& vcom, vector<W>& ctot, vector<B>& vaff, vector<K>& vcs, vector<W>& vcout, const G& x, const vector<K>& vcob, const vector<W>& vtot, double M, double R, int L, FC fc, FA fa) {
+inline int leidenMoveW(vector<K>& vcom, vector<W>& ctot, vector<B>& vaff, vector<K>& vcs, vector<W>& vcout, const G& x, const vector<K>& vcob, const vector<W>& vtot, double M, double R, int L, bool useCPM, FC fc, FA fa) {
   int l = 0;
   W  el = W();
   for (; l<L;) {
@@ -590,7 +595,7 @@ inline int leidenMoveW(vector<K>& vcom, vector<W>& ctot, vector<B>& vaff, vector
       if (REFINE && ctot[vcom[u]]>vtot[u]) return;
       leidenClearScanW(vcs, vcout);
       leidenScanCommunitiesW<false, REFINE>(vcs, vcout, x, u, vcom, vcob);
-      auto [c, e] = leidenChooseCommunity(x, u, vcom, vtot, ctot, vcs, vcout, M, R);
+      auto [c, e] = leidenChooseCommunity(x, u, vcom, vtot, ctot, vcs, vcout, M, R, useCPM);
       if (c)      { leidenChangeCommunityW(vcom, ctot, x, u, c, vtot); x.forEachEdgeKey(u, [&](auto v) { vaff[v] = B(1); }); }
       vaff[u] = B();
       el += e;  // l1-norm
@@ -643,7 +648,7 @@ inline int leidenMoveW(vector<K>& vcom, vector<W>& ctot, vector<B>& vaff, vector
  * @returns iterations performed (0 if converged already)
  */
 template <bool REFINE=false, class G, class K, class W, class B, class FC, class FA>
-inline int leidenMoveOmpW(vector<K>& vcom, vector<W>& ctot, vector<B>& vaff, vector<vector<K>*>& vcs, vector<vector<W>*>& vcout, const G& x, const vector<K>& vcob, const vector<W>& vtot, double M, double R, int L, FC fc, FA fa) {
+inline int leidenMoveOmpW(vector<K>& vcom, vector<W>& ctot, vector<B>& vaff, vector<vector<K>*>& vcs, vector<vector<W>*>& vcout, const G& x, const vector<K>& vcob, const vector<W>& vtot, double M, double R, int L, bool useCPM, FC fc, FA fa) {
   size_t S = x.span();
   int l = 0;
   W  el = W();
@@ -657,7 +662,7 @@ inline int leidenMoveOmpW(vector<K>& vcom, vector<W>& ctot, vector<B>& vaff, vec
       if (REFINE && ctot[vcom[u]]>vtot[u]) continue;
       leidenClearScanW(*vcs[t], *vcout[t]);
       leidenScanCommunitiesW<false, REFINE>(*vcs[t], *vcout[t], x, u, vcom, vcob);
-      auto [c, e] = leidenChooseCommunity(x, u, vcom, vtot, ctot, *vcs[t], *vcout[t], M, R);
+      auto [c, e] = leidenChooseCommunity(x, u, vcom, vtot, ctot, *vcs[t], *vcout[t], M, R, useCPM);
       if (c && leidenChangeCommunityOmpW<REFINE>(vcom, ctot, x, u, c, vtot)) x.forEachEdgeKey(u, [&](auto v) { vaff[v] = B(1); });
       vaff[u] = B();
       el += e;  // l1-norm
@@ -685,9 +690,9 @@ inline int leidenMoveOmpW(vector<K>& vcom, vector<W>& ctot, vector<B>& vaff, vec
  * @returns iterations performed (0 if converged already)
  */
 template <bool REFINE=false, class G, class K, class W, class B, class FC>
-inline int leidenMoveOmpW(vector<K>& vcom, vector<W>& ctot, vector<B>& vaff, vector<vector<K>*>& vcs, vector<vector<W>*>& vcout, const G& x, const vector<K>& vcob, const vector<W>& vtot, double M, double R, int L, FC fc) {
+inline int leidenMoveOmpW(vector<K>& vcom, vector<W>& ctot, vector<B>& vaff, vector<vector<K>*>& vcs, vector<vector<W>*>& vcout, const G& x, const vector<K>& vcob, const vector<W>& vtot, double M, double R, int L, bool useCPM, FC fc) {
   auto fa = [](auto u) { return true; };
-  return leidenMoveOmpW<REFINE>(vcom, ctot, vaff, vcs, vcout, x, vcob, vtot, M, R, L, fc, fa);
+  return leidenMoveOmpW<REFINE>(vcom, ctot, vaff, vcs, vcout, x, vcob, vtot, M, R, L, useCPM, fc, fa);
 }
 #endif
 #pragma endregion
@@ -1253,8 +1258,8 @@ inline auto leidenInvokeOmp(const G& x, const LeidenOptions& o, FI fi, FM fm, FA
         bool isFirst = p==0;
         int m = 0;
         tl += measureDuration([&]() {
-          if (isFirst) m += leidenMoveOmpW(ucom, ctot, vaff, vcs, vcout, x, vcob, utot, M, R, L, fc, fa);
-          else         m += leidenMoveOmpW(vcom, ctot, vaff, vcs, vcout, y, vcob, vtot, M, R, L, fc);
+          if (isFirst) m += leidenMoveOmpW(ucom, ctot, vaff, vcs, vcout, x, vcob, utot, M, R, L, o.useCPM, fc, fa);
+          else         m += leidenMoveOmpW(vcom, ctot, vaff, vcs, vcout, y, vcob, vtot, M, R, L, o.useCPM, fc);
         });
         tr += measureDuration([&]() {
           if (isFirst) copyValuesOmpW(vcob, ucom);
@@ -1263,8 +1268,8 @@ inline auto leidenInvokeOmp(const G& x, const LeidenOptions& o, FI fi, FM fm, FA
           else         leidenInitializeOmpW(vcom, ctot, y, vtot);
           if (isFirst) fillValueOmpU(vaff.data(), x.order(), B(1));
           else         fillValueOmpU(vaff.data(), y.order(), B(1));
-          if (isFirst) m += leidenMoveOmpW<true>(ucom, ctot, vaff, vcs, vcout, x, vcob, utot, M, R, L, fc);
-          else         m += leidenMoveOmpW<true>(vcom, ctot, vaff, vcs, vcout, y, vcob, vtot, M, R, L, fc);
+          if (isFirst) m += leidenMoveOmpW<true>(ucom, ctot, vaff, vcs, vcout, x, vcob, utot, M, R, L, o.useCPM, fc);
+          else         m += leidenMoveOmpW<true>(vcom, ctot, vaff, vcs, vcout, y, vcob, vtot, M, R, L, o.useCPM, fc);
         });
         l += max(m, 1); ++p;
         if (m<=1 || p>=P) break;
