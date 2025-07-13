@@ -42,7 +42,7 @@ using std::exit;
 
 
 #pragma region PERFORM
-#ifndef PEFORME
+#ifndef PERFORME
 #if !defined(NDEBUG) && defined(BUILD) && BUILD>=BUILD_ERROR
 /** Perform only if build mode is error or higher. */
 #define PERFORME(...)  __VA_ARGS__
