@@ -42,10 +42,6 @@ inline double getModularity(const G& x, const R& a, double M) {
 
 
 template <class K, class W>
-inline float refinementTime(const LouvainResult<K, W>& a) {
-  return 0;
-}
-template <class K, class W>
 inline float refinementTime(const LeidenResult<K, W>& a) {
   return a.refinementTime;
 }
@@ -53,31 +49,7 @@ inline float refinementTime(const LeidenResult<K, W>& a) {
 
 
 
-// PERFORM EXPERIMENT
-// ------------------
-
-template <class G>
-void runExperiment(const G& x) {
-  int repeat = REPEAT_METHOD;
-  double   M = edgeWeightOmp(x)/2;
-  // Follow a specific result logging format, which can be easily parsed later.
-  auto flog = [&](const auto& ans, const char *technique) {
-    printf(
-      "{%09.1fms, %09.1fms mark, %09.1fms init, %09.1fms firstpass, %09.1fms locmove, %09.1fms refine, %09.1fms aggr, %.3e aff, %04d iters, %03d passes, %01.9f modularity, %zu/%zu disconnected} %s\n",
-      ans.time, ans.markingTime, ans.initializationTime, ans.firstPassTime, ans.localMoveTime, refinementTime(ans), ans.aggregationTime,
-      double(ans.affectedVertices), ans.iterations, ans.passes, getModularity(x, ans, M),
-      countValue(communitiesDisconnectedOmp(x, ans.membership), char(1)),
-      communities(x, ans.membership).size(), technique
-    );
-  };
-  // Get community memberships on original graph (static).
-  {
-    auto a0 = louvainStaticOmp(x, {repeat});
-    flog(a0, "louvainStaticOmp");
-    auto b0 = leidenStaticOmp(x, {repeat});
-    flog(b0, "leidenStaticOmp");
-  }
-}
+// PERFORM EXPERIMENT (Removed)
 
 
 int main(int argc, char **argv) {
@@ -114,16 +86,19 @@ int main(int argc, char **argv) {
 
   auto res = leidenStaticOmp(x, opts);
 
-  printf("=== Leiden-%s(γ=%.2f) time（ms） ===\n",
-         opts.useCPM ? "CPM" : "Modularity", opts.resolution);
-  printf("totaltime: %.1f\n", res.time);
-  printf("marking: %.1f\n", res.markingTime);
-  printf("init: %.1f\n", res.initializationTime);
-  printf("firstpass: %.1f\n", res.firstPassTime);
-  printf("local: %.1f\n", res.localMoveTime);
-  printf("refine: %.1f\n", res.refinementTime);
-  printf("aggregation: %.1f\n", res.aggregationTime);
-  printf("===========================================\n");
+  auto printStats = [&](const auto& r) {
+    printf("=== Leiden-%s(γ=%.2f) time（ms） ===\n",
+           opts.useCPM ? "CPM" : "Modularity", opts.resolution);
+    printf("totaltime: %.1f\n", r.time);
+    printf("marking: %.1f\n", r.markingTime);
+    printf("init: %.1f\n", r.initializationTime);
+    printf("firstpass: %.1f\n", r.firstPassTime);
+    printf("local: %.1f\n", r.localMoveTime);
+    printf("refine: %.1f\n", r.refinementTime);
+    printf("aggregation: %.1f\n", r.aggregationTime);
+    printf("===========================================\n");
+  };
+  printStats(res);
 
   auto comm = communities(x, res.membership);
   printf("communitynumber = %zu\n", comm.size());
