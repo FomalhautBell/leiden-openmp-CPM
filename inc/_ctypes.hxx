@@ -27,7 +27,7 @@ using ssize_t = make_signed_t<size_t>;
  */
 struct None {
   #pragma region METHODS
-  #pragma region COMPARISION OPERATORS
+  #pragma region COMPARISON OPERATORS
   friend inline bool operator==(None l, None r)     noexcept { return true; }
   template <class T>
   friend inline bool operator==(None l, const T& r) noexcept { return false; }
