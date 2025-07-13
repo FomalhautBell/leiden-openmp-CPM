@@ -9,5 +9,4 @@
 #include "symmetricize.hxx"
 #include "selfLoop.hxx"
 #include "properties.hxx"
-#include "louvain.hxx"
 #include "leiden.hxx"
