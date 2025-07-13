@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
   opts.useCPM               = (quality == 1);
   opts.resolution           = gamma;
   opts.tolerance            = 1.3;
-  opts.aggregationTolerance = 0.1;
+  opts.aggregationTolerance = 0.8;
   opts.toleranceDrop        = 1;
   opts.maxIterations        = 10;
   opts.maxPasses            = 20;

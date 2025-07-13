@@ -5,8 +5,6 @@
 #include "Graph.hxx"
 #include "update.hxx"
 #include "mtx.hxx"
-#include "duplicate.hxx"
 #include "symmetricize.hxx"
-#include "selfLoop.hxx"
 #include "properties.hxx"
 #include "leiden.hxx"
